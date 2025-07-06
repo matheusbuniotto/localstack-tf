@@ -25,7 +25,6 @@ provider "aws" {
     sqs      = "http://127.0.0.1:4566"
     lambda   = "http://127.0.0.1:4566"
     iam      = "http://127.0.0.1:4566"
-    logs     = "http://127.0.0.1:4566"
   }
 }
 
@@ -38,13 +37,11 @@ variable "project_name" {
 
 # S3 Buckets
 resource "aws_s3_bucket" "input_bucket" {
-  bucket        = "${var.project_name}-input-bucket"
-  force_destroy = true
+  bucket = "${var.project_name}-input-bucket"
 }
 
 resource "aws_s3_bucket" "output_bucket" {
-  bucket        = "${var.project_name}-output-bucket"
-  force_destroy = true
+  bucket = "${var.project_name}-output-bucket"
 }
 
 # SNS Topics

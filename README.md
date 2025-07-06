@@ -72,8 +72,7 @@ echo 'import json
 import boto3
 import os
 from datetime import datetime
-
-# ... (copie o código da lambda do artefato)
+....
 ' > index.py
 
 zip lambda_function.zip index.py
@@ -92,11 +91,11 @@ INPUT_BUCKET=$(terraform output -raw input_bucket_name)
 
 # Criar e enviar um arquivo de teste
 echo "Hello, World! This is a test file." > test.txt
-aws --endpoint-url=http://localhost:4566 s3 cp test.txt s3://$INPUT_BUCKET/
+aws --endpoint-url=http://127.0.0.1:4566 s3 cp test.txt s3://$INPUT_BUCKET/
 
 # Verificar se o arquivo foi processado
 OUTPUT_BUCKET=$(terraform output -raw output_bucket_name)
-aws --endpoint-url=http://localhost:4566 s3 ls s3://$OUTPUT_BUCKET/
+aws --endpoint-url=http://127.0.0.1:4566 s3 ls s3://$OUTPUT_BUCKET/
 ```
 
 ## Testes e Monitoramento
