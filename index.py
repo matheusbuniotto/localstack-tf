@@ -3,63 +3,65 @@ import boto3
 import os
 from datetime import datetime
 
-# Initialize AWS clients
+# Inicializa os clientes AWS
 s3_client = boto3.client('s3')
 sns_client = boto3.client('sns')
+secrets_manager_client = boto3.client('secretsmanager')
+
+def get_secret(secret_arn):
+    """
+    Função para buscar um segredo do AWS Secrets Manager.
+    """
+    try:
+        response = secrets_manager_client.get_secret_value(SecretId=secret_arn)
+        return response['SecretString']
+    except Exception as e:
+        print(f"Erro ao buscar o segredo: {str(e)}")
+        raise e
 
 def handler(event, context):
     """
-    Lambda function to process files from SQS messages
+    Função Lambda para processar arquivos a partir de mensagens SQS.
     """
     try:
-        # Get environment variables
+        # Obtém as variáveis de ambiente
         output_bucket = os.environ['OUTPUT_BUCKET']
         sns_topic_arn = os.environ['SNS_TOPIC_ARN']
+        secret_arn = os.environ['SECRET_ARN']
         
-        # Process each record from SQS
+        # Busca o segredo
+        api_key = get_secret(secret_arn)
+        
+        # Processa cada registro do SQS
         for record in event['Records']:
-            # Parse the SQS message body (which contains SNS message)
             message_body = json.loads(record['body'])
-            
-            # Extract S3 event information from SNS message
             sns_message = json.loads(message_body['Message'])
             
-            # Get S3 bucket and key from the event
             for s3_record in sns_message['Records']:
                 bucket_name = s3_record['s3']['bucket']['name']
                 object_key = s3_record['s3']['object']['key']
                 
-                print(f"Processing file: {object_key} from bucket: {bucket_name}")
+                print(f"Processando arquivo: {object_key} do bucket: {bucket_name}")
                 
-                # Download the file from S3
                 response = s3_client.get_object(Bucket=bucket_name, Key=object_key)
                 file_content = response['Body'].read()
                 
-                # Process the file (example: add timestamp and convert to uppercase)
-                processed_content = process_file_content(file_content, object_key)
+                # Processa o conteúdo do arquivo, passando a chave da API
+                processed_content = process_file_content(file_content, object_key, api_key)
                 
-                # Generate output filename
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 output_key = f"processed_{timestamp}_{object_key}"
                 
-                # Save processed file to output bucket
                 s3_client.put_object(
                     Bucket=output_bucket,
                     Key=output_key,
                     Body=processed_content
                 )
                 
-                # Publish success message to SNS
                 message = {
                     "status": "success",
-                    "original_file": {
-                        "bucket": bucket_name,
-                        "key": object_key
-                    },
-                    "processed_file": {
-                        "bucket": output_bucket,
-                        "key": output_key
-                    },
+                    "original_file": {"bucket": bucket_name, "key": object_key},
+                    "processed_file": {"bucket": output_bucket, "key": output_key},
                     "processed_at": datetime.now().isoformat(),
                     "file_size": len(processed_content)
                 }
@@ -67,20 +69,15 @@ def handler(event, context):
                 sns_client.publish(
                     TopicArn=sns_topic_arn,
                     Message=json.dumps(message),
-                    Subject=f"File Processed: {object_key}"
+                    Subject=f"Arquivo Processado: {object_key}"
                 )
                 
-                print(f"Successfully processed {object_key} -> {output_key}")
+                print(f"Processado com sucesso {object_key} -> {output_key}")
         
-        return {
-            'statusCode': 200,
-            'body': json.dumps('Files processed successfully')
-        }
+        return {'statusCode': 200, 'body': json.dumps('Arquivos processados com sucesso')}
         
     except Exception as e:
-        print(f"Error processing files: {str(e)}")
-        
-        # Publish error message to SNS
+        print(f"Erro ao processar arquivos: {str(e)}")
         error_message = {
             "status": "error",
             "error": str(e),
@@ -91,49 +88,43 @@ def handler(event, context):
             sns_client.publish(
                 TopicArn=sns_topic_arn,
                 Message=json.dumps(error_message),
-                Subject="File Processing Error"
+                Subject="Erro no Processamento de Arquivos"
             )
         except Exception as sns_error:
-            print(f"Failed to publish error to SNS: {str(sns_error)}")
+            print(f"Falha ao publicar erro no SNS: {str(sns_error)}")
         
-        return {
-            'statusCode': 500,
-            'body': json.dumps(f'Error processing files: {str(e)}')
-        }
+        return {'statusCode': 500, 'body': json.dumps(f'Erro ao processar arquivos: {str(e)}')}
 
-def process_file_content(content, filename):
+def process_file_content(content, filename, api_key):
     """
-    Process file content - customize this based on your needs
+    Processa o conteúdo do arquivo - personalize conforme suas necessidades.
     """
     try:
-        # Example processing: convert text to uppercase and add metadata
         text_content = content.decode('utf-8')
-        
         processed_content = f"""
-File Processing Report
-=====================
-Original File: {filename}
-Processed At: {datetime.now().isoformat()}
-Original Size: {len(content)} bytes
+Relatório de Processamento de Arquivo
+====================================
+Arquivo Original: {filename}
+Processado Em: {datetime.now().isoformat()}
+Tamanho Original: {len(content)} bytes
+Segredo Utilizado (API Key): {api_key}
 
-Processed Content:
+Conteúdo Processado:
 {text_content.upper()}
 
-Processing completed successfully.
+Processamento concluído com sucesso.
 """
-        
         return processed_content.encode('utf-8')
         
     except UnicodeDecodeError:
-        # If it's not a text file, just add a processing header
         processed_content = f"""
-Binary File Processing Report
-============================
-Original File: {filename}
-Processed At: {datetime.now().isoformat()}
-Original Size: {len(content)} bytes
+Relatório de Processamento de Arquivo Binário
+===========================================
+Arquivo Original: {filename}
+Processado Em: {datetime.now().isoformat()}
+Tamanho Original: {len(content)} bytes
+Segredo Utilizado (API Key): {api_key}
 
-[Binary content preserved]
+[Conteúdo binário preservado]
 """
-        
         return processed_content.encode('utf-8') + content

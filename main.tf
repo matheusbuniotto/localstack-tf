@@ -25,6 +25,7 @@ provider "aws" {
     sqs      = "http://127.0.0.1:4566"
     lambda   = "http://127.0.0.1:4566"
     iam      = "http://127.0.0.1:4566"
+    secretsmanager = "http://127.0.0.1:4566"
   }
 }
 
@@ -150,6 +151,13 @@ resource "aws_iam_role_policy" "lambda_policy" {
           "sns:Publish"
         ]
         Resource = aws_sns_topic.file_processed.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue"
+        ]
+        Resource = aws_secretsmanager_secret.api_key.arn
       }
     ]
   })
@@ -168,6 +176,7 @@ resource "aws_lambda_function" "file_processor" {
     variables = {
       OUTPUT_BUCKET = aws_s3_bucket.output_bucket.bucket
       SNS_TOPIC_ARN = aws_sns_topic.file_processed.arn
+      SECRET_ARN    = aws_secretsmanager_secret.api_key.arn
     }
   }
 
@@ -274,6 +283,17 @@ resource "aws_sns_topic_policy" "file_received_policy" {
       }
     ]
   })
+}
+
+# --- Recursos para o Secrets Manager ---
+resource "aws_secretsmanager_secret" "api_key" {
+  name        = "${var.project_name}-api-key"
+  description = "Chave de API de exemplo para o processador de arquivos"
+}
+
+resource "aws_secretsmanager_secret_version" "api_key_version" {
+  secret_id     = aws_secretsmanager_secret.api_key.id
+  secret_string = "exemplo-de-chave-secreta-12345"
 }
 
 # Outputs

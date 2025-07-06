@@ -1,3 +1,4 @@
 lambda_function.zip
 test.txt
 .terraform*
+terraform*
